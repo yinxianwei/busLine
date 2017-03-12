@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>查询</title>
+    <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=xVGPXcfWdakjd64krbfPfUIyxahZeWXZ"></script>
+    <style type="text/css">
+    html {
+        height: 100%
+    }
+    
+    body {
+        height: 100%;
+        margin: 0px;
+        padding: 0px;
+        font-size: 16px;
+    }
+    
+    #container {
+        height: 100%;
+        width: 100%;
+        position: relative;
+        z-index: 1;
+    }
+    
+    #input-panel {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        z-index: 2;
+    }
+    
+    #line-panel {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+        padding: 0 1rem;
+    }
+    
+    #line-panel p {
+        margin: 0;
+        line-height: 3rem;
+        display: inline-block;
+        padding: 0 1rem;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    
+    #line-panel p:hover {
+        background: #eee;
+    }
+    
+    #line-panel .highlight {
+        background: #eee;
+    }
+    
+    #line-panel p span {
+        width: 2rem;
+        height: 8px;
+        display: inline-block;
+        background: red;
+        margin-right: .5rem;
+    }
+    
+    input {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="input-panel">
+        <input type="text" name="" placeholder="搜索" id="suggestId">
+        <div id="searchResultPanel" style="border:1px solid #C0C0C0;width:150px;height:auto; display:none;"></div>
+    </div>
+    <div id="line-panel">
+    </div>
+    <script type="text/javascript">
+    var map = new BMap.Map("container"); // 创建地图实例  
+    var point = new BMap.Point(121.361638, 31.233257); // 创建点坐标  
+    map.centerAndZoom(point, 15); // 初始化地图，设置中心点坐标和地图级别
+    // map.addOverlay(new BMap.Marker(point)); //添加标注
+
+    var top_right_navigation = new BMap.NavigationControl({
+        anchor: BMAP_ANCHOR_TOP_RIGHT
+    }); //右上角，仅包含平移和缩放按钮
+    map.addControl(top_right_navigation);
+
+    map.enableScrollWheelZoom();
+
+    map.setMapStyle({
+        styleJson: [{
+            "featureType": "arterial",
+            "elementType": "all",
+            "stylers": {
+                "visibility": "off"
+            }
+        }, {
+            "featureType": "highway",
+            "elementType": "all",
+            "stylers": {
+                "visibility": "off"
+            }
+        }, {
+            "featureType": "railway",
+            "elementType": "all",
+            "stylers": {
+                "visibility": "off"
+            }
+        }, {
+            "featureType": "water",
+            "elementType": "all",
+            "stylers": {
+                "visibility": "off"
+            }
+        }, {
+            "featureType": "green",
+            "elementType": "all",
+            "stylers": {
+                "visibility": "off"
+            }
+        }, {
+            "featureType": "poi",
+            "elementType": "all",
+            "stylers": {
+                "visibility": "on"
+            }
+        }]
+    });
+
+    searchBusRes(point);
+
+    // 查找坐标点周边公交站
+    function searchBusRes(point, title, address) {
+        map.centerAndZoom(point, 15); // 初始化地图，设置中心点坐标和地图级别
+        var marker = new BMap.Marker(point);
+        map.addOverlay(marker); //添加标注
+        G('line-panel').innerHTML = '';
+        _color_index = 0;
+
+        if (title && address) {
+            var opts = {
+                width: 200,
+                height: 100,
+                title: title,
+                enableMessage: true
+            }
+            var infoWindow = new BMap.InfoWindow(address, opts); // 创建信息窗口对象 
+            marker.addEventListener("click", function() {
+                map.openInfoWindow(infoWindow, point); //开启信息窗口
+            });
+        }
+        var options = {
+            onSearchComplete: function(results) {
+                // 判断状态是否正确
+                if (local.getStatus() == BMAP_STATUS_SUCCESS) {
+                    var tempList = getBusList(results);
+                    for (var i = tempList.length - 1; i >= 0; i--) {
+                        getBusLinePoints(tempList[i]);
+                    }
+                } else {
+                    alert('没有搜索到相关信息')
+                }
+            }
+        };
+        var local = new BMap.LocalSearch(point, options);
+        local.searchNearby("公交站", point, 1000);
+    }
+
+    // 吐出公交路线列表
+    function getBusList(results) {
+        var busItemList = [];
+        for (var i = 0; i < results.getCurrentNumPois(); i++) {
+            var poi = results.getPoi(i);
+            var marker = new BMap.Marker(poi.point);
+            var icon = new BMap.Icon('http://image.yinxianwei.cn/icon.png', new BMap.Size(15, 15));
+            icon.setImageSize(new BMap.Size(15, 15));
+            marker.setIcon(icon);
+            marker.setTitle(poi.title);
+            marker.setTop(true);
+            marker.setShadow(new BMap.Icon('./', new BMap.Size(0, 0)));
+            map.addOverlay(marker); //添加标注
+            try {
+                var tempList = poi.address.split('; ');
+                for (var j = tempList.length - 1; j >= 0; j--) {
+                    var item = tempList[j];
+                    if (busItemList.indexOf(item) == -1) {
+                        busItemList.push(item);
+                    }
+                }
+            } catch (e) {
+                console.warn(e);
+            }
+        }
+        return busItemList;
+    }
+
+    var _color_index = 0;
+    var _color_list = ['#0c88e8', '#3daafc', '#803300', '#252525', '#009688'];
+
+    // 获取公交路线颜色
+    function getLineColor() {
+        _color_index++;
+        return _color_list[_color_index % 5];
+    }
+
+    // 公交线坐标点列表
+    function getBusLinePoints(busName) {
+        var busline = new BMap.BusLineSearch(map, {
+            // renderOptions: {
+            //     map: map
+            // },
+            onGetBusListComplete: function(result) {
+                if (result) {
+                    var fstLine = result.getBusListItem(0); //获取第一个公交列表显示到map上
+                    busline.getBusLine(fstLine);
+                }
+            },
+            onGetBusLineComplete: function(result) {
+                drawBiusLine(result);
+            }
+        });
+        busline.getBusList(busName);
+    }
+
+    // 绘制公交路线
+    function drawBiusLine(result) {
+
+        var polyline = result.getPolyline();
+        var color = getLineColor();
+        polyline.setStrokeColor(color);
+        polyline.setStrokeWeight(3);
+        polyline.setStrokeOpacity(1);
+
+        var _id = 'p_' + _color_index;
+        polyline.line_id = _id;
+        var _p = document.createElement('p');
+        _p.id = _id;
+        var _span = document.createElement('span');
+        _span.style.background = color;
+        _p.appendChild(_span);
+        _p.append(result.name.split('(')[0]);
+        _p.onmouseover = overLine;
+
+
+        G('line-panel').appendChild(_p);
+
+        polyline.addEventListener('mouseover', function(sender) {
+            sender.target.setStrokeWeight(6);
+            sender.target.setStrokeOpacity(1);
+
+            var tempId = sender.target.line_id;
+            document.getElementById(tempId).className = 'highlight';
+        });
+        polyline.addEventListener('mouseout', function(sender) {
+            sender.target.setStrokeWeight(3);
+            sender.target.setStrokeOpacity(0.65);
+
+            var tempId = sender.target.line_id;
+            document.getElementById(tempId).className = '';
+        });
+        map.addOverlay(polyline);
+    }
+
+    function G(id) {
+        return document.getElementById(id);
+    }
+
+
+    var ac = new BMap.Autocomplete( //建立一个自动完成的对象
+        {
+            "input": "suggestId",
+            "location": map
+        });
+
+    ac.addEventListener("onhighlight", function(e) { //鼠标放在下拉列表上的事件
+        var str = "";
+        var _value = e.fromitem.value;
+        var value = "";
+        if (e.fromitem.index > -1) {
+            value = _value.province + _value.city + _value.district + _value.street + _value.business;
+        }
+        str = "FromItem<br />index = " + e.fromitem.index + "<br />value = " + value;
+
+        value = "";
+        if (e.toitem.index > -1) {
+            _value = e.toitem.value;
+            value = _value.province + _value.city + _value.district + _value.street + _value.business;
+        }
+        str += "<br />ToItem<br />index = " + e.toitem.index + "<br />value = " + value;
+        G("searchResultPanel").innerHTML = str;
+    });
+
+    var myValue;
+    ac.addEventListener("onconfirm", function(e) { //鼠标点击下拉列表后的事件
+        var _value = e.item.value;
+        myValue = _value.province + _value.city + _value.district + _value.street + _value.business;
+        G("searchResultPanel").innerHTML = "onconfirm<br />index = " + e.item.index + "<br />myValue = " + myValue;
+
+        setPlace();
+    });
+
+    function setPlace() {
+        map.clearOverlays(); //清除地图上所有覆盖物
+
+        function myFun() {
+            var poi = local.getResults().getPoi(0); //获取第一个智能搜索的结果
+            searchBusRes(poi.point, poi.title, poi.address);
+        }
+        var local = new BMap.LocalSearch(map, { //智能搜索
+            onSearchComplete: myFun,
+            renderOptions: {
+                selectFirstResult: true,
+                autoViewport: false
+            }
+        });
+        local.search(myValue);
+
+    }
+
+    var _lastPolyline;
+
+    function overLine(el) {
+        var line_id = el.target.getAttribute('id');
+        var polyline = getBusLine(line_id);
+        if (_lastPolyline) {
+            _lastPolyline.setStrokeWeight(3);
+            _lastPolyline.setStrokeOpacity(0.65);
+
+        }
+        if (polyline) {
+            polyline.setStrokeWeight(6);
+            polyline.setStrokeOpacity(1);
+
+            _lastPolyline = polyline;
+        }
+    }
+
+    function getBusLine(line_id) {
+        var tempList = map.getOverlays();
+        for (var i = tempList.length - 1; i >= 0; i--) {
+            var item = tempList[i];
+            if (item.line_id && item.line_id == line_id) {
+                return item;
+            }
+        }
+    }
+    </script>
+</body>
+
+</html>
